@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -8,21 +9,23 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Docker Build') {
             steps {
-                echo 'Building Risk Aware Development Pipeline...'
+                echo 'Building backend Docker image...'
+                sh 'docker build -t risk-aware-backend:v1 -f backend/Dockerfile .'
             }
         }
 
-        stage('Test') {
+        stage('Docker Verify') {
             steps {
-                echo 'Running application tests...'
+                sh 'docker images risk-aware-backend'
+                echo 'Docker image created successfully!'
             }
         }
 
         stage('Complete') {
             steps {
-                echo 'Pipeline executed successfully!'
+                echo 'Jenkins and Docker integration successful!'
             }
         }
     }
