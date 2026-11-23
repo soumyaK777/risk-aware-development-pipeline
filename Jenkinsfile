@@ -17,25 +17,29 @@ pipeline {
             }
         }
 
+        stage('Trivy Vulnerability Scan') {
+            steps {
+                script {
+                    def scanStatus = sh(
+                        script: 'trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 risk-aware-backend:v1',
+                        returnStatus: true
+                    )
+
+                    env.TRIVY_EXIT_CODE = "${scanStatus}"
+                }
+            }
+        }
+
         stage('Risk Gatekeeper') {
             steps {
                 script {
-                    def trigger = sh(
-                        script: "awk -F= '/^RISK_TRIGGER=/ {gsub(/\\r/, \"\", \$2); value=\$2} END {print value}' backend/health_config.txt",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Risk trigger detected: ${trigger}"
-
-                    if (trigger == 'HIGH') {
-                        error('GATEKEEPER REJECTED: HIGH RISK. Deployment blocked!')
-                    } else if (trigger == 'LOW') {
-                        echo 'GATEKEEPER APPROVED: LOW RISK. Deployment allowed.'
+                    if (env.TRIVY_EXIT_CODE == '1') {
+                        error('GATEKEEPER REJECTED: HIGH OR CRITICAL VULNERABILITIES FOUND. Deployment blocked!')
+                    } else if (env.TRIVY_EXIT_CODE == '0') {
+                        echo 'GATEKEEPER APPROVED: No HIGH or CRITICAL vulnerabilities. Deployment allowed.'
                     } else {
-                        error('GATEKEEPER REJECTED: Invalid or missing risk configuration!')
+                        error('GATEKEEPER REJECTED: Trivy scan failed!')
                     }
-
-                    env.RISK_TRIGGER = trigger
                 }
             }
         }
@@ -100,7 +104,7 @@ pipeline {
 
         stage('Complete') {
             steps {
-                echo 'Jenkins + Docker + Risk Gatekeeper pipeline completed!'
+                echo 'Jenkins + Docker + Trivy + Risk Gatekeeper pipeline completed!'
             }
         }
     }
