@@ -9,21 +9,21 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Building Risk Aware Development Pipeline...'
+                sh 'docker build -t risk-aware-backend:${BUILD_NUMBER} -f backend/Dockerfile .'
             }
         }
 
-        stage('Test') {
+        stage('Risk Gatekeeper - Trivy Scan') {
             steps {
-                echo 'Running application tests...'
+                sh 'trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 risk-aware-backend:${BUILD_NUMBER}'
             }
         }
 
         stage('Complete') {
             steps {
-                echo 'Pipeline executed successfully!'
+                echo 'Security checks passed! Ready for deployment.'
             }
         }
     }
