@@ -1,0 +1,6 @@
+{
+  "name": "Risk-Aware Deployment Pipeline Dashboard",
+  "description": "Automated risk-aware CI/CD deployment pipeline dashboard with dynamic risk evaluation, gatekeeper decision rules, and live terminal telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
