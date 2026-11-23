@@ -169,7 +169,7 @@ app.post('/api/toggle', (req, res) => {
 });
 
 // Start listening on execution port 5000
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`========================================================`);
   console.log(`[DEVOPS PIPELINE ENGINE] Server executing on port ${PORT}`);
   console.log(`[STATUS ENDPOINT] http://localhost:${PORT}/api/status`);
