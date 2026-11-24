@@ -1,0 +1,49 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'HIGH-RISK demo pipeline started!'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t risk-aware-backend:high -f Dockerfile.high .'
+            }
+        }
+
+        stage('Trivy Vulnerability Scan') {
+            steps {
+                script {
+                    def scanStatus = sh(
+                        script: 'trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 risk-aware-backend:high',
+                        returnStatus: true
+                    )
+                    env.TRIVY_EXIT_CODE = "${scanStatus}"
+                }
+            }
+        }
+
+        stage('Risk Gatekeeper') {
+            steps {
+                script {
+                    if (env.TRIVY_EXIT_CODE == '1') {
+                        error('GATEKEEPER REJECTED: HIGH OR CRITICAL VULNERABILITIES FOUND. Deployment blocked!')
+                    } else if (env.TRIVY_EXIT_CODE == '0') {
+                        echo 'GATEKEEPER APPROVED: No HIGH or CRITICAL vulnerabilities.'
+                    } else {
+                        error('GATEKEEPER REJECTED: Trivy scan failed!')
+                    }
+                }
+            }
+        }
+
+        stage('Complete') {
+            steps {
+                echo 'HIGH-RISK scan demonstration completed. Existing backend was not modified.'
+            }
+        }
+    }
+}
