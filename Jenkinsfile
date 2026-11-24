@@ -2,8 +2,20 @@
 pipeline {
     agent any
 
-    stages {
+    parameters {
+        choice(
+            name: 'RISK_LEVEL',
+            choices: ['LOW', 'HIGH'],
+            description: 'Select the risk level for the Docker image'
+        )
+    }
 
+    environment {
+        LOW_IMAGE = 'risk-aware-backend:v1'
+        HIGH_IMAGE = 'risk-aware-backend:high'
+    }
+
+    stages {
         stage('Checkout') {
             steps {
                 echo 'GitHub connection successful!'
@@ -12,16 +24,25 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                echo 'Building backend Docker image...'
-                sh 'docker build -t risk-aware-backend:v1 -f backend/Dockerfile .'
+                script {
+                    if (params.RISK_LEVEL == 'LOW') {
+                        sh 'docker build -t risk-aware-backend:v1 -f backend/Dockerfile .'
+                    } else {
+                        sh 'docker build -t risk-aware-backend:high -f Dockerfile.high .'
+                    }
+                }
             }
         }
 
         stage('Trivy Vulnerability Scan') {
             steps {
                 script {
+                    def image = params.RISK_LEVEL == 'LOW'
+                        ? env.LOW_IMAGE
+                        : env.HIGH_IMAGE
+
                     def scanStatus = sh(
-                        script: 'trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 risk-aware-backend:v1',
+                        script: "trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 ${image}",
                         returnStatus: true
                     )
 
@@ -36,7 +57,7 @@ pipeline {
                     if (env.TRIVY_EXIT_CODE == '1') {
                         error('GATEKEEPER REJECTED: HIGH OR CRITICAL VULNERABILITIES FOUND. Deployment blocked!')
                     } else if (env.TRIVY_EXIT_CODE == '0') {
-                        echo 'GATEKEEPER APPROVED: No HIGH or CRITICAL vulnerabilities. Deployment allowed.'
+                        echo 'GATEKEEPER APPROVED: No HIGH or CRITICAL vulnerabilities.'
                     } else {
                         error('GATEKEEPER REJECTED: Trivy scan failed!')
                     }
@@ -45,11 +66,14 @@ pipeline {
         }
 
         stage('Docker Deploy') {
+            when {
+                expression {
+                    params.RISK_LEVEL == 'LOW'
+                }
+            }
             steps {
                 sh '''
                     set -eu
-
-                    echo "Preparing Docker deployment..."
 
                     if docker container inspect risk-backend >/dev/null 2>&1; then
                         docker stop risk-backend
@@ -65,11 +89,8 @@ pipeline {
                             docker rename risk-backend-previous risk-backend
                             docker start risk-backend
                         fi
-
                         exit 1
                     fi
-
-                    echo "Checking new backend deployment..."
 
                     HEALTHY=0
 
@@ -82,14 +103,12 @@ pipeline {
                     done
 
                     if [ "$HEALTHY" -ne 1 ]; then
-                        echo "Deployment health check failed!"
                         docker rm -f risk-backend || true
 
                         if docker container inspect risk-backend-previous >/dev/null 2>&1; then
                             docker rename risk-backend-previous risk-backend
                             docker start risk-backend
                         fi
-
                         exit 1
                     fi
 
@@ -97,14 +116,14 @@ pipeline {
                         docker rm -f risk-backend-previous
                     fi
 
-                    echo "Backend deployed and health check passed!"
+                    echo 'LOW-risk backend deployed successfully!'
                 '''
             }
         }
 
         stage('Complete') {
             steps {
-                echo 'Jenkins + Docker + Trivy + Risk Gatekeeper pipeline completed!'
+                echo "Risk level ${params.RISK_LEVEL} pipeline completed!"
             }
         }
     }
